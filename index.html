@@ -1,160 +1,412 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Tracker Ważności Produktów</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lodówkometr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/zxing-library.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            max-width: 600px;
-            margin: auto;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
         }
-        input, button, select {
-            padding: 10px;
-            margin: 5px 0;
+        .expired {
+            background-color: #fecaca; /* red-200 */
+            border-left: 5px solid #dc2626; /* red-600 */
+        }
+        .expiring-soon {
+            background-color: #fef08a; /* yellow-200 */
+            border-left: 5px solid #ca8a04; /* yellow-600 */
+        }
+        .ok {
+            background-color: #dcfce7; /* green-200 */
+            border-left: 5px solid #16a34a; /* green-600 */
+        }
+        #interactive.viewport {
+            position: relative;
             width: 100%;
-            box-sizing: border-box;
+            height: auto;
+            overflow: hidden;
+            border-radius: 0.5rem; /* rounded-lg */
         }
-        button {
-            cursor: pointer;
+        #interactive video {
+            width: 100%;
+            height: auto;
+            display: block;
         }
-        .product {
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
-            color: white;
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
-        .green { background-color: #4CAF50; }
-        .orange { background-color: #FFA500; }
-        .red { background-color: #f44336; }
-        .header { font-weight: bold; font-size: 1.1em; }
-        .small { font-size: 0.9em; margin-bottom: 5px; }
-        #alert { font-weight: bold; margin-top: 10px; }
-        #footer {
-            text-align: center;
-            padding: 10px;
-            font-size: 0.8em;
-            color: #777;
-            margin-top: auto;
+        input[type=number] {
+            -moz-appearance: textfield;
         }
     </style>
 </head>
-<body>
-    <h1>Produkty z datą ważności</h1>
+<body class="bg-slate-100 text-slate-800 p-4 md:p-8">
 
-    <input type="text" id="name" placeholder="Nazwa produktu" />
-    <input type="date" id="expiry" />
-    <input type="hidden" id="editIndex" />
-    <button onclick="addOrEditProduct()">💾 Zapisz</button>
+    <div class="container mx-auto max-w-3xl bg-white shadow-xl rounded-lg p-6 md:p-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-sky-600">Lodówkometr</h1>
+            <p class="text-slate-600">Twoja inteligentna lista produktów w lodówce.</p>
+        </header>
 
-    <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
-    <select id="sort" onchange="renderProducts()">
-        <option value="date">📅 Sortuj: data ważności</option>
-        <option value="name">🔠 Sortuj: alfabetycznie</option>
-    </select>
+        <section id="add-product-section" class="mb-8 p-6 bg-slate-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4 text-sky-700">Dodaj Nowy Produkt</h2>
+            <form id="product-form" class="space-y-4">
+                <div>
+                    <label for="product-name" class="block text-sm font-medium text-slate-700">Nazwa Produktu:</label>
+                    <input type="text" id="product-name" name="product-name" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="expiry-date" class="block text-sm font-medium text-slate-700">Data Ważności:</label>
+                    <input type="date" id="expiry-date" name="expiry-date" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="quantity" class="block text-sm font-medium text-slate-700">Ilość:</label>
+                    <input type="number" id="quantity" name="quantity" min="1" value="1" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="barcode" class="block text-sm font-medium text-slate-700">Kod Kreskowy (opcjonalnie):</label>
+                    <input type="text" id="barcode" name="barcode" readonly class="mt-1 block w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md shadow-sm sm:text-sm" placeholder="Zeskanuj kod...">
+                </div>
+                <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                    <button type="submit" class="w-full sm:w-auto flex-grow bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out">
+                        Dodaj Produkt
+                    </button>
+                    <button type="button" id="scan-barcode-btn" class="w-full sm:w-auto flex-grow bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out">
+                        Skanuj Kod Kreskowy
+                    </button>
+                </div>
+            </form>
+            <div id="scanner-status" class="mt-2 text-sm text-slate-600"></div>
+        </section>
 
-    <div id="alert"></div>
-    <h2>Lista produktów</h2>
-    <div id="productList"></div>
+        <section id="scanner-section" class="hidden mb-8 p-6 bg-slate-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4 text-teal-700">Skaner Kodów Kreskowych</h2>
+            <div id="interactive" class="viewport">
+                <video id="scanner-video" playsinline></video>
+            </div>
+            <p id="scan-feedback" class="mt-2 text-sm text-slate-600">Skieruj kamerę na kod kreskowy.</p>
+            <button type="button" id="stop-scan-btn" class="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out">
+                Zatrzymaj Skanowanie
+            </button>
+        </section>
 
-    <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 3:22 PM
+        <section id="notifications-section" class="mb-8 p-6 bg-amber-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4 text-amber-700">Powiadomienia</h2>
+            <div id="notifications-list" class="space-y-2">
+                <p class="text-slate-500 italic">Brak ważnych powiadomień.</p>
+            </div>
+        </section>
+
+        <section id="product-list-section" class="p-6 bg-slate-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4 text-sky-700">Twoje Produkty w Lodówce</h2>
+            <div id="product-list" class="space-y-4">
+                <p class="text-slate-500 italic">Brak produktów. Dodaj coś!</p>
+            </div>
+        </section>
+
+        <footer class="mt-12 text-center text-sm text-slate-500">
+            <p>&copy; <span id="current-year"></span> Lodówkometr. Miłego zarządzania!</p>
+        </footer>
     </div>
 
     <script>
-        let products = JSON.parse(localStorage.getItem('products')) || [];
+        // Log to check if ZXing is available immediately after its script tag
+        console.log('Stan ZXing zaraz po tagu skryptu:', typeof ZXing);
+
+        // JavaScript for the application
+        const productForm = document.getElementById('product-form');
+        const productNameInput = document.getElementById('product-name');
+        const expiryDateInput = document.getElementById('expiry-date');
+        const quantityInput = document.getElementById('quantity');
+        const barcodeInput = document.getElementById('barcode');
+        const productListDiv = document.getElementById('product-list');
+        const notificationsListDiv = document.getElementById('notifications-list');
+        
+        const scanBarcodeBtn = document.getElementById('scan-barcode-btn');
+        const stopScanBtn = document.getElementById('stop-scan-btn');
+        const scannerSection = document.getElementById('scanner-section');
+        const scannerVideo = document.getElementById('scanner-video');
+        const scannerStatus = document.getElementById('scanner-status');
+        const scanFeedback = document.getElementById('scan-feedback');
+
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+
+        let products = [];
+        const EXPIRY_SOON_THRESHOLD_DAYS = 3; 
+        let codeReader = null; 
+
+        // --- Product Management ---
 
         function saveProducts() {
-            localStorage.setItem('products', JSON.stringify(products));
+            localStorage.setItem('fridgeProducts', JSON.stringify(products));
+        }
+
+        function loadProducts() {
+            const storedProducts = localStorage.getItem('fridgeProducts');
+            if (storedProducts) {
+                products = JSON.parse(storedProducts);
+            }
         }
 
         function renderProducts() {
-            const container = document.getElementById('productList');
-            const alertBox = document.getElementById('alert');
-            const filterText = document.getElementById('filter').value.toLowerCase();
-            const sortOption = document.getElementById('sort').value;
+            productListDiv.innerHTML = ''; 
+            notificationsListDiv.innerHTML = ''; 
+            let hasNotifications = false;
 
-            container.innerHTML = '';
-            alertBox.innerHTML = '';
+            if (products.length === 0) {
+                productListDiv.innerHTML = '<p class="text-slate-500 italic">Brak produktów. Dodaj coś!</p>';
+                notificationsListDiv.innerHTML = '<p class="text-slate-500 italic">Brak ważnych powiadomień.</p>';
+                return;
+            }
 
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            let hasExpiring = false;
+            products.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-            const filtered = products.filter(p => p.name.toLowerCase().includes(filterText));
-            const sorted = sortOption === 'date'
-                ? filtered.sort((a, b) => new Date(a.expiry) - new Date(b.expiry))
-                : filtered.sort((a, b) => a.name.localeCompare(b.name));
+            products.forEach(product => {
+                const productItem = document.createElement('div');
+                productItem.className = 'p-4 rounded-md shadow flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0';
+                
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); 
+                const expiryDate = new Date(product.expiryDate);
+                expiryDate.setHours(0,0,0,0); 
 
-            sorted.forEach((p, i) => {
-                const expiryDate = new Date(p.expiry);
-                expiryDate.setHours(0,0,0,0);
-                let diff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                if (diff < 0) diff = 0;
+                const timeDiff = expiryDate.getTime() - today.getTime();
+                const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
-                let color = 'green';
-                if (diff <= 5) color = 'orange';
-                if (diff < 1) color = 'red';
+                let statusClass = 'ok';
+                let statusText = `Wygasa: ${expiryDate.toLocaleDateString('pl-PL')}`;
+                let notificationMessage = '';
 
-                const div = document.createElement('div');
-                div.className = `product ${color}`;
-                div.innerHTML = `
-                    <div class="header">${p.name}</div>
-                    <div class="small">Ważny do: ${p.expiry} (${diff} dni)</div>
-                    <button onclick="editProduct(${i})">✏️ Edytuj</button>
-                    <button onclick="deleteProduct(${i})">🗑️ Usuń</button>
+                if (dayDiff < 0) {
+                    statusClass = 'expired';
+                    statusText = `Przeterminowane od ${Math.abs(dayDiff)} dni (dnia ${expiryDate.toLocaleDateString('pl-PL')})`;
+                    notificationMessage = `${product.name} jest przeterminowane! (Kod: ${product.barcode || 'brak'})`;
+                } else if (dayDiff <= EXPIRY_SOON_THRESHOLD_DAYS) {
+                    statusClass = 'expiring-soon';
+                    if (dayDiff === 0) {
+                       statusText = `Termin ważności upływa dzisiaj! (${expiryDate.toLocaleDateString('pl-PL')})`;
+                       notificationMessage = `${product.name} kończy się dzisiaj! (Kod: ${product.barcode || 'brak'})`;
+                    } else {
+                       statusText = `Wygasa za ${dayDiff} dni (dnia ${expiryDate.toLocaleDateString('pl-PL')})`;
+                       notificationMessage = `${product.name} kończy się za ${dayDiff} dni. (Kod: ${product.barcode || 'brak'})`;
+                    }
+                }
+                
+                productItem.classList.add(statusClass);
+
+                if (notificationMessage) {
+                    const notificationItem = document.createElement('p');
+                    notificationItem.className = `text-sm p-2 rounded-md ${statusClass === 'expired' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`;
+                    notificationItem.textContent = notificationMessage;
+                    notificationsListDiv.appendChild(notificationItem);
+                    hasNotifications = true;
+                }
+
+                productItem.innerHTML = `
+                    <div class="flex-grow">
+                        <h3 class="text-lg font-semibold">${product.name}</h3>
+                        <p class="text-sm">${statusText}</p>
+                        <p class="text-sm">Ilość: ${product.quantity}</p>
+                        ${product.barcode ? `<p class="text-xs text-slate-500">Kod: ${product.barcode}</p>` : ''}
+                    </div>
+                    <button data-id="${product.id}" class="remove-btn mt-2 sm:mt-0 sm:ml-4 bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded-md text-sm transition duration-150 ease-in-out">
+                        Usuń
+                    </button>
                 `;
-                container.appendChild(div);
-                if (diff <= 5) hasExpiring = true;
+                productListDiv.appendChild(productItem);
             });
 
-            if (hasExpiring) {
-                alertBox.innerHTML = '⚠️ Uwaga! Masz produkty bliskie końca ważności.';
-                alertBox.style.color = 'red';
+            if (!hasNotifications) {
+                 notificationsListDiv.innerHTML = '<p class="text-slate-500 italic">Brak ważnych powiadomień.</p>';
             }
+
+            document.querySelectorAll('.remove-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    removeProduct(e.target.dataset.id);
+                });
+            });
         }
 
-        function addOrEditProduct() {
-            const name = document.getElementById('name').value.trim();
-            const expiry = document.getElementById('expiry').value;
-            const editIndex = document.getElementById('editIndex').value;
+        function addProduct(event) {
+            event.preventDefault();
+            const name = productNameInput.value.trim();
+            const expiryDate = expiryDateInput.value;
+            const quantity = parseInt(quantityInput.value);
+            const scannedBarcode = barcodeInput.value.trim();
 
-            if (!name || !expiry) return;
-
-            if (editIndex === '') {
-                products.push({ name, expiry });
-            } else {
-                products[parseInt(editIndex)] = { name, expiry };
-                document.getElementById('editIndex').value = '';
+            if (!name || !expiryDate || quantity < 1) {
+                // Użyjmy niestandardowego okna dialogowego zamiast alert() w przyszłości
+                scannerStatus.textContent = 'Proszę wypełnić wszystkie wymagane pola (Nazwa, Data Ważności, Ilość).';
+                setTimeout(() => scannerStatus.textContent = '', 3000);
+                return;
             }
 
-            document.getElementById('name').value = '';
-            document.getElementById('expiry').value = '';
+            const newProduct = {
+                id: Date.now().toString(), 
+                name: name,
+                expiryDate: expiryDate,
+                quantity: quantity,
+                barcode: scannedBarcode || null 
+            };
+
+            products.push(newProduct);
             saveProducts();
             renderProducts();
+            productForm.reset(); 
+            barcodeInput.value = ''; 
+            scannerStatus.textContent = 'Produkt dodany pomyślnie!';
+            setTimeout(() => scannerStatus.textContent = '', 3000);
         }
 
-        function editProduct(index) {
-            const p = products[index];
-            document.getElementById('name').value = p.name;
-            document.getElementById('expiry').value = p.expiry;
-            document.getElementById('editIndex').value = index;
+        function removeProduct(productId) {
+            products = products.filter(product => product.id !== productId);
+            saveProducts();
+            renderProducts();
+            scannerStatus.textContent = 'Produkt usunięty.';
+            setTimeout(() => scannerStatus.textContent = '', 3000);
         }
 
-        function deleteProduct(index) {
-            if (confirm('Czy na pewno chcesz usunąć ten produkt?')) {
-                products.splice(index, 1);
-                saveProducts();
-                renderProducts();
+        // --- Barcode Scanning ---
+        async function initBarcodeScanner() {
+            console.log('Stan ZXing na początku initBarcodeScanner:', typeof ZXing); // Dodatkowy log
+            if (typeof ZXing === 'undefined' || ZXing === null) {
+                scannerStatus.textContent = 'Błąd: Biblioteka skanera (ZXing) nie została załadowana.';
+                scanFeedback.textContent = 'Odśwież stronę. Jeśli problem się powtórzy, sprawdź konsolę (F12) i połączenie internetowe.';
+                console.error('ZXing jest niezdefiniowane lub null. Biblioteka mogła nie zostać załadowana.');
+                
+                // Wyłącz przycisk skanowania, aby zapobiec dalszym próbom
+                scanBarcodeBtn.disabled = true;
+                scanBarcodeBtn.textContent = 'Skaner Niedostępny';
+                scanBarcodeBtn.classList.add('bg-gray-400', 'hover:bg-gray-400', 'cursor-not-allowed');
+                scanBarcodeBtn.classList.remove('bg-teal-500', 'hover:bg-teal-600');
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                scannerStatus.textContent = 'Twoja przeglądarka nie wspiera dostępu do kamery.';
+                scanFeedback.textContent = 'Błąd: Brak wsparcia dla kamery.';
+                return;
+            }
+
+            // Inicjalizuj codeReader tylko jeśli nie został jeszcze zainicjalizowany lub jeśli poprzednia instancja została zresetowana
+            if (!codeReader) {
+                 codeReader = new ZXing.BrowserMultiFormatReader();
+            }
+
+            try {
+                scannerStatus.textContent = 'Prośba o dostęp do kamery...';
+                scanFeedback.textContent = 'Proszę zezwolić na dostęp do kamery.';
+                
+                // Pobierz listę dostępnych urządzeń wideo
+                const videoInputDevices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+                if (videoInputDevices.length === 0) {
+                    scannerStatus.textContent = 'Nie znaleziono kamery.';
+                    scanFeedback.textContent = 'Błąd: Brak dostępnych kamer.';
+                    return;
+                }
+                
+                // Użyj pierwszej dostępnej kamery (zazwyczaj tylna na urządzeniach mobilnych)
+                const selectedDeviceId = videoInputDevices[0].deviceId;
+
+                scannerSection.classList.remove('hidden');
+                scannerStatus.textContent = 'Skaner aktywny. Skieruj kamerę na kod.';
+                scanFeedback.textContent = 'Skanowanie...';
+                
+                // Rozpocznij dekodowanie ze strumienia wideo
+                // Ważne: decodeFromVideoDevice rzuca wyjątek, jeśli nie może uzyskać dostępu do kamery
+                codeReader.decodeFromVideoDevice(selectedDeviceId, scannerVideo, (result, err, controls) => {
+                    if (result) {
+                        console.log('Zeskanowano kod:', result);
+                        barcodeInput.value = result.getText();
+                        scannerStatus.textContent = `Zeskanowano kod: ${result.getText()}`;
+                        scanFeedback.textContent = `Zeskanowano: ${result.getText()}`;
+                        stopScanning(controls); // Przekaż controls do funkcji stopScanning
+                        productNameInput.focus(); 
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException) && !(err instanceof ZXing.ChecksumException) && !(err instanceof ZXing.FormatException)) {
+                        console.error('Błąd skanowania:', err);
+                        scanFeedback.textContent = 'Błąd skanowania. Spróbuj ponownie.';
+                        // Nie zatrzymuj skanowania przy drobnych błędach, pozwól użytkownikowi dostosować
+                    }
+                });
+
+            } catch (err) {
+                console.error('Błąd dostępu do kamery lub inicjalizacji skanera:', err);
+                if (err.name === 'NotAllowedError') {
+                    scannerStatus.textContent = 'Odmówiono dostępu do kamery. Sprawdź uprawnienia w przeglądarce.';
+                    scanFeedback.textContent = 'Brak pozwolenia na użycie kamery.';
+                } else {
+                    scannerStatus.textContent = 'Nie udało się uruchomić skanera. Sprawdź konsolę (F12).';
+                    scanFeedback.textContent = 'Błąd inicjalizacji skanera.';
+                }
+                scannerSection.classList.add('hidden');
+                 // Jeśli wystąpił błąd inicjalizacji, zresetuj codeReader, aby umożliwić ponowną próbę
+                if (codeReader) {
+                    codeReader.reset();
+                }
             }
         }
+        
+        function stopScanning(controls) {
+            // Jeśli controls (z decodeFromVideoDevice) jest dostępne, użyj go do zatrzymania.
+            if (controls && typeof controls.stop === 'function') {
+                controls.stop();
+            }
+            // Dodatkowo, standardowe zatrzymanie przez reset i zwolnienie kamery.
+            if (codeReader) {
+                codeReader.reset(); 
+            }
+            if (scannerVideo.srcObject) {
+                scannerVideo.srcObject.getTracks().forEach(track => track.stop()); 
+                scannerVideo.srcObject = null;
+            }
+            scannerSection.classList.add('hidden');
+            scannerStatus.textContent = 'Skaner zatrzymany.';
+            scanFeedback.textContent = 'Skieruj kamerę na kod kreskowy.'; 
+        }
 
-        renderProducts();
+        // --- Event Listeners ---
+        productForm.addEventListener('submit', addProduct);
+
+        scanBarcodeBtn.addEventListener('click', () => {
+            barcodeInput.value = ''; 
+            initBarcodeScanner();
+        });
+
+        stopScanBtn.addEventListener('click', () => {
+            // Ponieważ stopScanning teraz może przyjmować argument 'controls',
+            // a tutaj go nie mamy, wywołujemy bez argumentu.
+            // Funkcja stopScanning obsłuży to prawidłowo.
+            stopScanning();
+        });
+
+        // --- Initial Load ---
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Stan ZXing na DOMContentLoaded:', typeof ZXing); // Log na załadowanie DOM
+            loadProducts();
+            renderProducts();
+            const today = new Date().toISOString().split('T')[0];
+            expiryDateInput.setAttribute('min', today);
+
+            // Sprawdź, czy ZXing jest dostępne po załadowaniu DOM i ewentualnie zaktualizuj UI przycisku skanowania
+            if (typeof ZXing === 'undefined' || ZXing === null) {
+                if (!scanBarcodeBtn.disabled) { // Sprawdź, czy już nie jest wyłączony
+                    scannerStatus.textContent = 'Uwaga: Biblioteka skanera może być niedostępna.';
+                    scanBarcodeBtn.disabled = true;
+                    scanBarcodeBtn.textContent = 'Skaner Niedostępny';
+                    scanBarcodeBtn.classList.add('bg-gray-400', 'hover:bg-gray-400', 'cursor-not-allowed');
+                    scanBarcodeBtn.classList.remove('bg-teal-500', 'hover:bg-teal-600');
+                    console.warn("ZXing nie jest dostępne po załadowaniu DOM. Przycisk skanowania wyłączony.");
+                }
+            } else {
+                 console.log("ZXing jest dostępne po załadowaniu DOM.");
+            }
+        });
+
     </script>
 </body>
 </html>
