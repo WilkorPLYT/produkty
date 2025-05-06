@@ -92,8 +92,6 @@
                 if (diff <= 5) color = 'orange';
                 if (diff < 1) color = 'red';
 
-                if (diff <= 3) hasExpiring = true;
-
                 const div = document.createElement('div');
                 div.className = `product ${color}`;
                 div.innerHTML = `
@@ -151,17 +149,16 @@
             fetchProductName(decodedText);
             if (html5QrCode) {
                 html5QrCode.stop();
-                document.querySelector('#reader').innerHTML = ''; // Wyczyść kontener po zeskanowaniu
+                document.querySelector('#reader').innerHTML = '';
                 const scanButton = document.querySelector('#reader ~ button');
                 if (scanButton) {
-                    scanButton.style.display = 'block'; // Pokaż ponownie przycisk skanowania
+                    scanButton.style.display = 'block';
                 }
-                html5QrCode = null; // Resetuj skaner
+                html5QrCode = null;
             }
         }
 
         function onScanFailure(error) {
-            // Możesz dodać tutaj obsługę błędów
             console.warn(`Nie udało się zeskanować kodu: ${error}`);
         }
 
@@ -170,10 +167,10 @@
             try {
                 const devices = await Html5Qrcode.getCameras();
                 if (devices && devices.length > 0) {
-                    const cameraId = devices[0].id; // Użyj pierwszego dostępnego urządzenia
+                    const cameraId = devices[0].id;
                     const config = {
                         fps: 10,
-                        qrbox: 250
+                        qrbox: 300 // Zwiększony rozmiar ramki
                     };
 
                     if (!html5QrCode) {
@@ -185,14 +182,14 @@
                         html5QrCode.render(onScanSuccess, onScanFailure);
                         const scanButton = document.querySelector('#reader ~ button');
                         if (scanButton) {
-                            scanButton.style.display = 'none'; // Ukryj przycisk
+                            scanButton.style.display = 'none';
                         }
                     } else {
                         html5QrCode.stop().then(() => {
                             html5QrCode.render(onScanSuccess, onScanFailure);
                             const scanButton = document.querySelector('#reader ~ button');
                             if (scanButton) {
-                                scanButton.style.display = 'none'; // Ukryj przycisk
+                                scanButton.style.display = 'none';
                             }
                         }).catch(err => {
                             console.error("Nie udało się zatrzymać skanera:", err);
