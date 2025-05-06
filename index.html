@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://unpkg.com/@zxing/library@latest/umd/zxing-wasm.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,7 +34,6 @@
         .red { background-color: #f44336; }
         .header { font-weight: bold; font-size: 1.1em; }
         .small { font-size: 0.9em; margin-bottom: 5px; }
-        #barcode-scanner { width: 300px; height: 200px; margin: auto; }
         #alert { font-weight: bold; margin-top: 10px; }
         #footer {
             text-align: center;
@@ -53,8 +51,6 @@
     <input type="date" id="expiry" />
     <input type="hidden" id="editIndex" />
     <button onclick="addOrEditProduct()">💾 Zapisz</button>
-    <div id="barcode-scanner"></div>
-    <button onclick="startScanner()">📷 Skanuj kod kreskowy</button>
 
     <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
     <select id="sort" onchange="renderProducts()">
@@ -67,12 +63,11 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 2:27 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 3:22 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
-        let reader = null;
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -115,6 +110,7 @@
                     <button onclick="deleteProduct(${i})">🗑️ Usuń</button>
                 `;
                 container.appendChild(div);
+                if (diff <= 5) hasExpiring = true;
             });
 
             if (hasExpiring) {
@@ -156,90 +152,6 @@
                 saveProducts();
                 renderProducts();
             }
-        }
-
-        async function startScanner() {
-            const video = document.createElement('video');
-            const scannerDiv = document.getElementById('barcode-scanner');
-            scannerDiv.innerHTML = '';
-            scannerDiv.appendChild(video);
-
-            try {
-                await ZXing.BrowserMultiFormatReader.listVideoInputDevices()
-                    .then(videoInputDevices => {
-                        if (videoInputDevices.length > 0) {
-                            const firstDeviceId = videoInputDevices[0].deviceId;
-                            reader = new ZXing.BrowserMultiFormatReader();
-                            return reader.videoInputDevice(firstDeviceId);
-                        } else {
-                            throw new Error("Nie znaleziono dostępnych kamer.");
-                        }
-                    });
-
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                    .then(stream => {
-                        video.srcObject = stream;
-                        video.setAttribute('playsinline', true);
-                        video.play();
-
-                        const decodeContinuously = () => {
-                            reader.decodeFromVideoElement(video)
-                                .then(result => {
-                                    if (result) {
-                                        console.log('Kod kreskowy wykryty (zxing-wasm):', result.text);
-                                        reader.reset();
-                                        video.srcObject.getTracks().forEach(track => track.stop());
-                                        const scanButton = document.querySelector('#barcode-scanner ~ button');
-                                        if (scanButton) {
-                                            scanButton.style.display = 'block';
-                                        }
-                                        fetchProductName(result.text);
-                                    } else {
-                                        requestAnimationFrame(decodeContinuously);
-                                    }
-                                })
-                                .catch(err => {
-                                    console.error('Błąd podczas dekodowania:', err);
-                                    requestAnimationFrame(decodeContinuously);
-                                });
-                        };
-
-                        const scanButton = document.querySelector('#barcode-scanner ~ button');
-                        if (scanButton) {
-                            scanButton.style.display = 'none';
-                        }
-                        decodeContinuously();
-
-                    })
-                    .catch(err => {
-                        console.error("Nie uzyskano dostępu do kamery:", err);
-                        alert("Nie uzyskano dostępu do kamery.");
-                        const scanButton = document.querySelector('#barcode-scanner ~ button');
-                        if (scanButton) {
-                            scanButton.style.display = 'block';
-                        }
-                    });
-
-            } catch (error) {
-                console.error("Błąd podczas inicjalizacji zxing-wasm:", error);
-                alert(`Nie udało się uruchomić skanera: ${error.message}`);
-            }
-        }
-
-        function fetchProductName(barcode) {
-            fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
-                .then(res => res.json())
-                .then(data => {
-                    const nameField = document.getElementById("name");
-                    if (data.status === 1 && data.product.product_name) {
-                        nameField.value = data.product.product_name;
-                    } else {
-                        nameField.value = barcode;
-                    }
-                })
-                .catch(() => {
-                    document.getElementById("name").value = barcode;
-                });
         }
 
         renderProducts();
