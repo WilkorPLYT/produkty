@@ -1,197 +1,200 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Tracker Ważności Produktów</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      max-width: 600px;
-      margin: auto;
-    }
-    input, button, select {
-      padding: 10px;
-      margin: 5px 0;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    button {
-      cursor: pointer;
-    }
-    .product {
-      padding: 10px;
-      border-radius: 8px;
-      margin: 10px 0;
-      color: white;
-    }
-    .green { background-color: #4CAF50; }
-    .orange { background-color: #FFA500; }
-    .red { background-color: #f44336; }
-    .header { font-weight: bold; font-size: 1.1em; }
-    .small { font-size: 0.9em; margin-bottom: 5px; }
-    #reader { width: 100%; max-width: 300px; margin: auto; display: none; }
-    #alert { font-weight: bold; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Tracker Ważności Produktów</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+        input, button, select {
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+        }
+        .product {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            color: white;
+        }
+        .green { background-color: #4CAF50; }
+        .orange { background-color: #FFA500; }
+        .red { background-color: #f44336; }
+        .header { font-weight: bold; font-size: 1.1em; }
+        .small { font-size: 0.9em; margin-bottom: 5px; }
+        #reader { width: 100%; max-width: 300px; margin: auto; display: none; }
+        #alert { font-weight: bold; margin-top: 10px; }
+    </style>
 </head>
 <body>
-  <h1>Produkty z datą ważności</h1>
+    <h1>Produkty z datą ważności</h1>
 
-  <input type="text" id="name" placeholder="Nazwa produktu" />
-  <input type="date" id="expiry" />
-  <input type="hidden" id="editIndex" />
-  <button onclick="addOrEditProduct()">💾 Zapisz</button>
-  <button onclick="toggleScanner()">📷 Skanuj kod kreskowy</button>
+    <input type="text" id="name" placeholder="Nazwa produktu" />
+    <input type="date" id="expiry" />
+    <input type="hidden" id="editIndex" />
+    <button onclick="addOrEditProduct()">💾 Zapisz</button>
+    <button onclick="toggleScanner()">📷 Skanuj kod kreskowy</button>
 
-  <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
-  <select id="sort" onchange="renderProducts()">
-    <option value="date">📅 Sortuj: data ważności</option>
-    <option value="name">🔠 Sortuj: alfabetycznie</option>
-  </select>
+    <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
+    <select id="sort" onchange="renderProducts()">
+        <option value="date">📅 Sortuj: data ważności</option>
+        <option value="name">🔠 Sortuj: alfabetycznie</option>
+    </select>
 
-  <div id="reader"></div>
-  <div id="alert"></div>
-  <h2>Lista produktów</h2>
-  <div id="productList"></div>
+    <div id="reader"></div>
+    <div id="alert"></div>
+    <h2>Lista produktów</h2>
+    <div id="productList"></div>
 
-  <script>
-    const products = JSON.parse(localStorage.getItem('products')) || [];
+    <script>
+        let products = JSON.parse(localStorage.getItem('products')) || [];
 
-    function saveAndRender() {
-      localStorage.setItem('products', JSON.stringify(products));
-      renderProducts();
-    }
+        function saveProducts() {
+            localStorage.setItem('products', JSON.stringify(products));
+        }
 
-    function addOrEditProduct() {
-      const name = document.getElementById('name').value.trim();
-      const expiry = document.getElementById('expiry').value;
-      const editIndex = document.getElementById('editIndex').value;
+        function renderProducts() {
+            const container = document.getElementById('productList');
+            const alertBox = document.getElementById('alert');
+            const filterText = document.getElementById('filter').value.toLowerCase();
+            const sortOption = document.getElementById('sort').value;
 
-      if (!name || !expiry) return;
+            container.innerHTML = '';
+            alertBox.innerHTML = '';
 
-      if (editIndex === '') {
-        products.push({ name, expiry });
-      } else {
-        products[parseInt(editIndex)] = { name, expiry };
-        document.getElementById('editIndex').value = '';
-      }
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            let hasExpiring = false;
 
-      document.getElementById('name').value = '';
-      document.getElementById('expiry').value = '';
-      saveAndRender();
-    }
+            const filtered = products.filter(p => p.name.toLowerCase().includes(filterText));
+            const sorted = sortOption === 'date'
+                ? filtered.sort((a, b) => new Date(a.expiry) - new Date(b.expiry))
+                : filtered.sort((a, b) => a.name.localeCompare(b.name));
 
-    function renderProducts() {
-      const container = document.getElementById('productList');
-      const alertBox = document.getElementById('alert');
-      const filterText = document.getElementById('filter').value.toLowerCase();
-      const sortOption = document.getElementById('sort').value;
+            sorted.forEach((p, i) => {
+                const expiryDate = new Date(p.expiry);
+                expiryDate.setHours(0,0,0,0);
+                let diff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                if (diff < 0) diff = 0;
 
-      container.innerHTML = '';
-      alertBox.innerHTML = '';
+                let color = 'green';
+                if (diff <= 5) color = 'orange';
+                if (diff < 1) color = 'red';
 
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      let hasExpiring = false;
+                if (diff <= 3) hasExpiring = true;
 
-      const filtered = products.filter(p => p.name.toLowerCase().includes(filterText));
-      const sorted = sortOption === 'date'
-        ? filtered.sort((a, b) => new Date(a.expiry) - new Date(b.expiry))
-        : filtered.sort((a, b) => a.name.localeCompare(b.name));
-
-      sorted.forEach((p, i) => {
-        const expiryDate = new Date(p.expiry);
-        expiryDate.setHours(0,0,0,0);
-        let diff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-        if (diff < 0) diff = 0;
-
-        let color = 'green';
-        if (diff <= 5) color = 'orange';
-        if (diff < 1) color = 'red';
-
-        if (diff <= 3) hasExpiring = true;
-
-        const div = document.createElement('div');
-        div.className = `product ${color}`;
-        div.innerHTML = `
-          <div class="header">${p.name}</div>
-          <div class="small">Ważny do: ${p.expiry} (${diff} dni)</div>
-          <button onclick="editProduct(${i})">✏️ Edytuj</button>
-          <button onclick="deleteProduct(${i})">🗑️ Usuń</button>
-        `;
-        container.appendChild(div);
-      });
-
-      if (hasExpiring) {
-        alertBox.innerHTML = '⚠️ Uwaga! Masz produkty bliskie końca ważności.';
-        alertBox.style.color = 'red';
-      }
-    }
-
-    function editProduct(index) {
-      const p = products[index];
-      document.getElementById('name').value = p.name;
-      document.getElementById('expiry').value = p.expiry;
-      document.getElementById('editIndex').value = index;
-    }
-
-    function deleteProduct(index) {
-      if (confirm('Czy na pewno chcesz usunąć ten produkt?')) {
-        products.splice(index, 1);
-        saveAndRender();
-      }
-    }
-
-    let scannerVisible = false;
-    const html5QrCode = new Html5Qrcode("reader");
-
-    function toggleScanner() {
-      const reader = document.getElementById("reader");
-      if (scannerVisible) {
-        html5QrCode.stop().catch(err => console.warn("Stop error", err));
-        reader.style.display = "none";
-        scannerVisible = false;
-      } else {
-        Html5Qrcode.getCameras().then(devices => {
-          if (devices && devices.length) {
-            html5QrCode.start(
-              devices[0].id,
-              { fps: 10, qrbox: 250 },
-              (decodedText) => {
-                fetchProductName(decodedText);
-                toggleScanner();
-              },
-              (errorMessage) => {
-                console.warn("Błąd skanowania: ", errorMessage);
-              }
-            ).then(() => {
-              reader.style.display = "block";
-              scannerVisible = true;
+                const div = document.createElement('div');
+                div.className = `product ${color}`;
+                div.innerHTML = `
+                    <div class="header">${p.name}</div>
+                    <div class="small">Ważny do: ${p.expiry} (${diff} dni)</div>
+                    <button onclick="editProduct(${i})">✏️ Edytuj</button>
+                    <button onclick="deleteProduct(${i})">🗑️ Usuń</button>
+                `;
+                container.appendChild(div);
             });
-          }
-        }).catch(err => console.error("Błąd kamery:", err));
-      }
-    }
 
-    function fetchProductName(barcode) {
-      fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
-        .then(res => res.json())
-        .then(data => {
-          const nameField = document.getElementById("name");
-          if (data.status === 1 && data.product.product_name) {
-            nameField.value = data.product.product_name;
-          } else {
-            nameField.value = barcode;
-          }
-        })
-        .catch(() => {
-          document.getElementById("name").value = barcode;
-        });
-    }
+            if (hasExpiring) {
+                alertBox.innerHTML = '⚠️ Uwaga! Masz produkty bliskie końca ważności.';
+                alertBox.style.color = 'red';
+            }
+        }
 
-    renderProducts();
-  </script>
+        function addOrEditProduct() {
+            const name = document.getElementById('name').value.trim();
+            const expiry = document.getElementById('expiry').value;
+            const editIndex = document.getElementById('editIndex').value;
+
+            if (!name || !expiry) return;
+
+            if (editIndex === '') {
+                products.push({ name, expiry });
+            } else {
+                products[parseInt(editIndex)] = { name, expiry };
+                document.getElementById('editIndex').value = '';
+            }
+
+            document.getElementById('name').value = '';
+            document.getElementById('expiry').value = '';
+            saveProducts(); // Zapisujemy produkty natychmiast po dodaniu/edycji
+            renderProducts();
+        }
+
+        function editProduct(index) {
+            const p = products[index];
+            document.getElementById('name').value = p.name;
+            document.getElementById('expiry').value = p.expiry;
+            document.getElementById('editIndex').value = index;
+        }
+
+        function deleteProduct(index) {
+            if (confirm('Czy na pewno chcesz usunąć ten produkt?')) {
+                products.splice(index, 1);
+                saveProducts(); // Zapisujemy produkty natychmiast po usunięciu
+                renderProducts();
+            }
+        }
+
+        let scannerVisible = false;
+        const html5QrCode = new Html5Qrcode("reader");
+
+        function toggleScanner() {
+            const reader = document.getElementById("reader");
+            if (scannerVisible) {
+                html5QrCode.stop().catch(err => console.warn("Stop error", err));
+                reader.style.display = "none";
+                scannerVisible = false;
+            } else {
+                Html5Qrcode.getCameras().then(devices => {
+                    if (devices && devices.length) {
+                        html5QrCode.start(
+                            devices[0].id,
+                            { fps: 10, qrbox: 250 },
+                            (decodedText) => {
+                                fetchProductName(decodedText);
+                                toggleScanner();
+                            },
+                            (errorMessage) => {
+                                console.warn("Błąd skanowania: ", errorMessage);
+                            }
+                        ).then(() => {
+                            reader.style.display = "block";
+                            scannerVisible = true;
+                        });
+                    } else {
+                        alert("Nie znaleziono dostępnych kamer.");
+                    }
+                }).catch(err => console.error("Błąd kamery:", err));
+            }
+        }
+
+        function fetchProductName(barcode) {
+            fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+                .then(res => res.json())
+                .then(data => {
+                    const nameField = document.getElementById("name");
+                    if (data.status === 1 && data.product.product_name) {
+                        nameField.value = data.product.product_name;
+                    } else {
+                        nameField.value = barcode;
+                    }
+                })
+                .catch(() => {
+                    document.getElementById("name").value = barcode;
+                });
+        }
+
+        renderProducts(); // Wywołanie renderProducts przy załadowaniu strony
+    </script>
 </body>
 </html>
