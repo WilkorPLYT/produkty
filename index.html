@@ -67,7 +67,7 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 1:39:52 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 1:42:52 PM
     </div>
 
     <script>
@@ -185,17 +185,20 @@
                     const config = {
                         fps: 10,
                         qrbox: 300,
-                        formatsToSupport: [
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.EAN_8,
-                            Html5QrcodeSupportedFormats.UPC_A,
-                            Html5QrcodeSupportedFormats.UPC_E,
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.CODE_39,
-                            Html5QrcodeSupportedFormats.CODE_93,
-                            Html5QrcodeSupportedFormats.ITF,
-                            Html5QrcodeSupportedFormats.CODABAR
-                        ]
+                        decoder: {
+                            qrbox: { width: 300, height: 100 },
+                            possibleFormats: [
+                                "EAN_13",
+                                "EAN_8",
+                                "UPC_A",
+                                "UPC_E",
+                                "CODE_128",
+                                "CODE_39",
+                                "CODE_93",
+                                "ITF",
+                                "CODABAR"
+                            ]
+                        }
                     };
 
                     const html5QrCode = new Html5QrcodeScanner(
