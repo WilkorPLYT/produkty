@@ -67,7 +67,7 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 1:36:42 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 1:39:52 PM
     </div>
 
     <script>
@@ -184,30 +184,29 @@
                     const cameraId = devices[0].id;
                     const config = {
                         fps: 10,
-                        qrbox: 300
+                        qrbox: 300,
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.UPC_E,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.CODE_93,
+                            Html5QrcodeSupportedFormats.ITF,
+                            Html5QrcodeSupportedFormats.CODABAR
+                        ]
                     };
 
-                    if (!html5QrCode) {
-                        html5QrCode = new Html5QrcodeScanner(
-                            "reader",
-                            config,
-                            /* verbose= */ false
-                        );
-                        html5QrCode.render(onScanSuccess, onScanFailure);
-                        const scanButton = document.querySelector('#reader ~ button');
-                        if (scanButton) {
-                            scanButton.style.display = 'none';
-                        }
-                    } else {
-                        html5QrCode.stop().then(() => {
-                            html5QrCode.render(onScanSuccess, onScanFailure);
-                            const scanButton = document.querySelector('#reader ~ button');
-                            if (scanButton) {
-                                scanButton.style.display = 'none';
-                            }
-                        }).catch(err => {
-                            console.error("Nie udało się zatrzymać skanera:", err);
-                        });
+                    const html5QrCode = new Html5QrcodeScanner(
+                        "reader",
+                        config,
+                        /* verbose= */ false
+                    );
+                    html5QrCode.render(onScanSuccess, onScanFailure);
+                    const scanButton = document.querySelector('#reader ~ button');
+                    if (scanButton) {
+                        scanButton.style.display = 'none';
                     }
                 } else {
                     alert("Nie znaleziono dostępnych kamer.");
