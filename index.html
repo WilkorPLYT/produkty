@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script type="text/javascript" src="https://rawgit.com/schmich/instascan/master/bin/instascan.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,7 +35,7 @@
         .red { background-color: #f44336; }
         .header { font-weight: bold; font-size: 1.1em; }
         .small { font-size: 0.9em; margin-bottom: 5px; }
-        #preview { width: 300px; height: 200px; margin: auto; display: block; }
+        #barcode-scanner { width: 300px; height: 200px; margin: auto; }
         #alert { font-weight: bold; margin-top: 10px; }
         #footer {
             text-align: center;
@@ -53,7 +53,7 @@
     <input type="date" id="expiry" />
     <input type="hidden" id="editIndex" />
     <button onclick="addOrEditProduct()">💾 Zapisz</button>
-    <video id="preview" width="300" height="200" style="margin: auto; display: block;"></video>
+    <div id="barcode-scanner"></div>
     <button onclick="startScanner()">📷 Skanuj kod kreskowy</button>
 
     <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
@@ -67,18 +67,13 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 2:00:42 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 2:16:00 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
         let html5QrCode = null;
         let scanner = null;
-        let instascanReady = false;
-
-        window.addEventListener('load', () => {
-            instascanReady = true;
-        });
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -165,47 +160,64 @@
         }
 
         async function startScanner() {
-            const videoPreview = document.getElementById('preview');
-
-            while (!instascanReady) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-
+            const scannerDiv = document.getElementById('barcode-scanner');
             try {
-                scanner = new Instascan.Scanner({ video: videoPreview });
-
-                Instascan.Camera.getCameras().then(function (cameras) {
-                    if (cameras.length > 0) {
-                        scanner.use(cameras[0]).then(function() {
-                            const scanButton = document.querySelector('#reader ~ button');
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                    .then(function(stream) {
+                        Quagga.init({
+                            inputStream : {
+                                name : "Live",
+                                type : "LiveStream",
+                                target : scannerDiv,
+                                constraints: {
+                                    width: 640,
+                                    height: 480,
+                                    facingMode: 'environment'
+                                }
+                            },
+                            decoder : {
+                                readers : [
+                                    "ean_13_reader",
+                                    "ean_8_reader",
+                                    "code_128_reader",
+                                    "code_39_reader"
+                                ]
+                            }
+                        }, function(err) {
+                            if (err) {
+                                console.error(err);
+                                alert("Nie udało się uruchomić skanera kodu kreskowego.");
+                                return;
+                            }
+                            console.log("QuaggaJS zainicjalizowano.");
+                            Quagga.start();
+                            const scanButton = document.querySelector('#barcode-scanner ~ button');
                             if (scanButton) {
                                 scanButton.style.display = 'none';
                             }
-                        }).catch(function(e) {
-                            console.error("Nie można uruchomić kamery:", e);
-                            alert("Nie można uruchomić kamery: " + e);
                         });
-                        scanner.addListener('scan', function (content) {
-                            console.log("Kod zeskanowany:", content);
-                            scanner.stop();
-                            const scanButton = document.querySelector('#reader ~ button');
-                            if (scanButton) {
-                                scanButton.style.display = 'block';
-                            }
-                            fetchProductName(content);
-                        });
-                    } else {
-                        console.error('Nie znaleziono dostępnych kamer.');
-                        alert('Nie znaleziono dostępnych kamer.');
-                    }
-                }).catch(function (e) {
-                    console.error('Błąd podczas pobierania listy kamer:', e);
-                    alert('Błąd podczas pobierania listy kamer: ' + e);
-                });
+
+                        Quagga.onDetected(onBarcodeDetected);
+                    })
+                    .catch(function(err) {
+                        console.error("Nie uzyskano dostępu do kamery:", err);
+                        alert("Nie uzyskano dostępu do kamery.");
+                    });
             } catch (error) {
-                console.error('Błąd podczas uruchamiania skanera:', error);
-                alert('Wystąpił problem z uruchomieniem skanera.');
+                console.error("Błąd podczas uruchamiania skanera:", error);
+                alert("Wystąpił problem z uruchomieniem skanera.");
             }
+        }
+
+        function onBarcodeDetected(result) {
+            console.log("Kod kreskowy wykryty:", result.codeResult.code);
+            Quagga.stop();
+            document.querySelector('#barcode-scanner').innerHTML = '';
+            const scanButton = document.querySelector('#barcode-scanner ~ button');
+            if (scanButton) {
+                scanButton.style.display = 'block';
+            }
+            fetchProductName(result.codeResult.code);
         }
 
         function fetchProductName(barcode) {
