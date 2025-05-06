@@ -67,13 +67,18 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 1:56:42 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 2:00:42 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
-        let html5QrCode = null; // Już nie używamy html5-qrcode
-        let scanner = null; // Dodajemy zmienną dla instancji Instascan.Scanner
+        let html5QrCode = null;
+        let scanner = null;
+        let instascanReady = false;
+
+        window.addEventListener('load', () => {
+            instascanReady = true;
+        });
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -161,36 +166,46 @@
 
         async function startScanner() {
             const videoPreview = document.getElementById('preview');
-            let scanner = new Instascan.Scanner({ video: videoPreview });
 
-            Instascan.Camera.getCameras().then(function (cameras) {
-                if (cameras.length > 0) {
-                    scanner.use(cameras[0]).then(function() {
-                        const scanButton = document.querySelector('#reader ~ button');
-                        if (scanButton) {
-                            scanButton.style.display = 'none';
-                        }
-                    }).catch(function(e) {
-                        console.error("Nie można uruchomić kamery:", e);
-                        alert("Nie można uruchomić kamery: " + e);
-                    });
-                    scanner.addListener('scan', function (content) {
-                        console.log("Kod zeskanowany:", content);
-                        scanner.stop();
-                        const scanButton = document.querySelector('#reader ~ button');
-                        if (scanButton) {
-                            scanButton.style.display = 'block';
-                        }
-                        fetchProductName(content);
-                    });
-                } else {
-                    console.error('Nie znaleziono dostępnych kamer.');
-                    alert('Nie znaleziono dostępnych kamer.');
-                }
-            }).catch(function (e) {
-                console.error('Błąd podczas pobierania listy kamer:', e);
-                alert('Błąd podczas pobierania listy kamer: ' + e);
-            });
+            while (!instascanReady) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            try {
+                scanner = new Instascan.Scanner({ video: videoPreview });
+
+                Instascan.Camera.getCameras().then(function (cameras) {
+                    if (cameras.length > 0) {
+                        scanner.use(cameras[0]).then(function() {
+                            const scanButton = document.querySelector('#reader ~ button');
+                            if (scanButton) {
+                                scanButton.style.display = 'none';
+                            }
+                        }).catch(function(e) {
+                            console.error("Nie można uruchomić kamery:", e);
+                            alert("Nie można uruchomić kamery: " + e);
+                        });
+                        scanner.addListener('scan', function (content) {
+                            console.log("Kod zeskanowany:", content);
+                            scanner.stop();
+                            const scanButton = document.querySelector('#reader ~ button');
+                            if (scanButton) {
+                                scanButton.style.display = 'block';
+                            }
+                            fetchProductName(content);
+                        });
+                    } else {
+                        console.error('Nie znaleziono dostępnych kamer.');
+                        alert('Nie znaleziono dostępnych kamer.');
+                    }
+                }).catch(function (e) {
+                    console.error('Błąd podczas pobierania listy kamer:', e);
+                    alert('Błąd podczas pobierania listy kamer: ' + e);
+                });
+            } catch (error) {
+                console.error('Błąd podczas uruchamiania skanera:', error);
+                alert('Wystąpił problem z uruchomieniem skanera.');
+            }
         }
 
         function fetchProductName(barcode) {
