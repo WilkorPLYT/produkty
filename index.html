@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -32,7 +32,7 @@
         .red { background-color: #f44336; }
         .header { font-weight: bold; font-size: 1.1em; }
         .small { font-size: 0.9em; margin-bottom: 5px; }
-        #reader { width: 100%; max-width: 300px; margin: auto; display: none; }
+        #reader { width: 300px; height: 200px; margin: auto; }
         #alert { font-weight: bold; margin-top: 10px; }
     </style>
 </head>
@@ -43,7 +43,8 @@
     <input type="date" id="expiry" />
     <input type="hidden" id="editIndex" />
     <button onclick="addOrEditProduct()">💾 Zapisz</button>
-    <button onclick="toggleScanner()">📷 Skanuj kod kreskowy</button>
+    <div id="reader"></div>
+    <button onclick="startScanner()">📷 Skanuj kod kreskowy</button>
 
     <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
     <select id="sort" onchange="renderProducts()">
@@ -51,13 +52,13 @@
         <option value="name">🔠 Sortuj: alfabetycznie</option>
     </select>
 
-    <div id="reader"></div>
     <div id="alert"></div>
     <h2>Lista produktów</h2>
     <div id="productList"></div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
+        let html5QrCode = null;
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -145,47 +146,64 @@
             }
         }
 
-        let scannerVisible = false;
-        const html5QrCode = new Html5Qrcode("reader");
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log(`Kod zeskanowany: ${decodedText}`, decodedResult);
+            fetchProductName(decodedText);
+            if (html5QrCode) {
+                html5QrCode.stop();
+                document.querySelector('#reader').innerHTML = ''; // Wyczyść kontener po zeskanowaniu
+                const scanButton = document.querySelector('#reader ~ button');
+                if (scanButton) {
+                    scanButton.style.display = 'block'; // Pokaż ponownie przycisk skanowania
+                }
+                html5QrCode = null; // Resetuj skaner
+            }
+        }
 
-        function toggleScanner() {
-            const reader = document.getElementById("reader");
-            if (scannerVisible) {
-                html5QrCode.stop().catch(err => console.warn("Stop error", err));
-                reader.style.display = "none";
-                scannerVisible = false;
-            } else {
-                Html5Qrcode.getCameras().then(devices => {
-                    if (devices && devices.length) {
-                        const cameraId = devices[0].id;
-                        html5QrCode.start(
-                            cameraId,
-                            { fps: 10, qrbox: 250 },
-                            (decodedText) => {
-                                console.log("Zeskanowano kod:", decodedText);
-                                fetchProductName(decodedText);
-                                toggleScanner();
-                            },
-                            (errorMessage) => {
-                                console.warn("Błąd dekodowania:", errorMessage);
-                            }
-                        ).then(() => {
-                            reader.style.display = "block";
-                            scannerVisible = true;
-                            console.log("Skaner uruchomiony na kamerze:", cameraId);
-                        }).catch(err => {
-                            console.error("Błąd uruchomienia skanera:", err);
-                            alert("Nie udało się uruchomić skanera. Sprawdź uprawnienia kamery.");
-                            reader.style.display = "none";
-                            scannerVisible = false;
-                        });
+        function onScanFailure(error) {
+            // Możesz dodać tutaj obsługę błędów
+            console.warn(`Nie udało się zeskanować kodu: ${error}`);
+        }
+
+        async function startScanner() {
+            const readerDiv = document.getElementById('reader');
+            try {
+                const devices = await Html5Qrcode.getCameras();
+                if (devices && devices.length > 0) {
+                    const cameraId = devices[0].id; // Użyj pierwszego dostępnego urządzenia
+                    const config = {
+                        fps: 10,
+                        qrbox: 250
+                    };
+
+                    if (!html5QrCode) {
+                        html5QrCode = new Html5QrcodeScanner(
+                            "reader",
+                            config,
+                            /* verbose= */ false
+                        );
+                        html5QrCode.render(onScanSuccess, onScanFailure);
+                        const scanButton = document.querySelector('#reader ~ button');
+                        if (scanButton) {
+                            scanButton.style.display = 'none'; // Ukryj przycisk
+                        }
                     } else {
-                        alert("Nie znaleziono dostępnych kamer.");
+                        html5QrCode.stop().then(() => {
+                            html5QrCode.render(onScanSuccess, onScanFailure);
+                            const scanButton = document.querySelector('#reader ~ button');
+                            if (scanButton) {
+                                scanButton.style.display = 'none'; // Ukryj przycisk
+                            }
+                        }).catch(err => {
+                            console.error("Nie udało się zatrzymać skanera:", err);
+                        });
                     }
-                }).catch(err => {
-                    console.error("Błąd pobierania listy kamer:", err);
-                    alert("Wystąpił problem z dostępem do kamery.");
-                });
+                } else {
+                    alert("Nie znaleziono dostępnych kamer.");
+                }
+            } catch (error) {
+                console.error("Błąd podczas pobierania listy kamer:", error);
+                alert("Wystąpił problem z dostępem do kamery.");
             }
         }
 
