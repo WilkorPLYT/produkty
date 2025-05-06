@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="pl">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -126,7 +126,7 @@
 
             document.getElementById('name').value = '';
             document.getElementById('expiry').value = '';
-            saveProducts(); // Zapisujemy produkty natychmiast po dodaniu/edycji
+            saveProducts();
             renderProducts();
         }
 
@@ -140,7 +140,7 @@
         function deleteProduct(index) {
             if (confirm('Czy na pewno chcesz usunąć ten produkt?')) {
                 products.splice(index, 1);
-                saveProducts(); // Zapisujemy produkty natychmiast po usunięciu
+                saveProducts();
                 renderProducts();
             }
         }
@@ -194,7 +194,7 @@
                 });
         }
 
-        renderProducts(); // Wywołanie renderProducts przy załadowaniu strony
+        renderProducts();
     </script>
 </body>
 </html>
