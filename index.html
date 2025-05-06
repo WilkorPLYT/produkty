@@ -11,6 +11,9 @@
             padding: 20px;
             max-width: 600px;
             margin: auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Zapewnia, że stopka jest na dole nawet przy małej ilości treści */
         }
         input, button, select {
             padding: 10px;
@@ -34,6 +37,13 @@
         .small { font-size: 0.9em; margin-bottom: 5px; }
         #reader { width: 300px; height: 200px; margin: auto; }
         #alert { font-weight: bold; margin-top: 10px; }
+        #footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 0.8em;
+            color: #777;
+            margin-top: auto; /* Przyciąga stopkę do dołu */
+        }
     </style>
 </head>
 <body>
@@ -55,6 +65,10 @@
     <div id="alert"></div>
     <h2>Lista produktów</h2>
     <div id="productList"></div>
+
+    <div id="footer">
+        Ostatnia aktualizacja kodu: 6 maja 2025
+    </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
@@ -170,7 +184,7 @@
                     const cameraId = devices[0].id;
                     const config = {
                         fps: 10,
-                        qrbox: 300 // Zwiększony rozmiar ramki
+                        qrbox: 300
                     };
 
                     if (!html5QrCode) {
