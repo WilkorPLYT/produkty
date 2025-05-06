@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
+    <script type="text/javascript" src="https://rawgit.com/schmich/instascan/master/bin/instascan.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,7 +35,7 @@
         .red { background-color: #f44336; }
         .header { font-weight: bold; font-size: 1.1em; }
         .small { font-size: 0.9em; margin-bottom: 5px; }
-        #reader { width: 300px; height: 200px; margin: auto; }
+        #preview { width: 300px; height: 200px; margin: auto; display: block; }
         #alert { font-weight: bold; margin-top: 10px; }
         #footer {
             text-align: center;
@@ -53,7 +53,7 @@
     <input type="date" id="expiry" />
     <input type="hidden" id="editIndex" />
     <button onclick="addOrEditProduct()">💾 Zapisz</button>
-    <div id="reader"></div>
+    <video id="preview" width="300" height="200" style="margin: auto; display: block;"></video>
     <button onclick="startScanner()">📷 Skanuj kod kreskowy</button>
 
     <input type="text" id="filter" placeholder="🔍 Szukaj produktu" oninput="renderProducts()" />
@@ -67,12 +67,13 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 1:50:42 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 1:54:42 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
         let html5QrCode = null; // Już nie używamy html5-qrcode
+        let scanner = null; // Dodajemy zmienną dla instancji Instascan.Scanner
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -159,50 +160,37 @@
         }
 
         async function startScanner() {
-            const readerDiv = document.getElementById('reader');
-            try {
-                const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+            const videoPreview = document.getElementById('preview');
+            scanner = new Instascan.Scanner({ video: videoPreview });
 
-                codeReader.listVideoInputDevices()
-                    .then((videoInputDevices) => {
-                        if (videoInputDevices.length > 0) {
-                            const firstDeviceId = videoInputDevices[0].deviceId;
-
-                            codeReader.decodeOnceFromVideoDevice(firstDeviceId, readerDiv)
-                                .then((result) => {
-                                    console.log('Kod kreskowy wykryty:', result.text);
-                                    fetchProductName(result.text);
-                                    codeReader.reset();
-                                    const scanButton = document.querySelector('#reader ~ button');
-                                    if (scanButton) {
-                                        scanButton.style.display = 'block';
-                                    }
-                                })
-                                .catch((err) => {
-                                    console.error('Błąd dekodowania:', err);
-                                    alert('Nie udało się odczytać kodu kreskowego.');
-                                    codeReader.reset();
-                                    const scanButton = document.querySelector('#reader ~ button');
-                                    if (scanButton) {
-                                        scanButton.style.display = 'block';
-                                    }
-                                });
-                            const scanButton = document.querySelector('#reader ~ button');
-                            if (scanButton) {
-                                scanButton.style.display = 'none';
-                            }
-                        } else {
-                            alert('Brak dostępnych kamer.');
+            Instascan.Camera.getCameras().then(function (cameras) {
+                if (cameras.length > 0) {
+                    scanner.use(cameras[0]).then(function() {
+                        const scanButton = document.querySelector('#reader ~ button');
+                        if (scanButton) {
+                            scanButton.style.display = 'none';
                         }
-                    })
-                    .catch((err) => {
-                        console.error('Błąd podczas pobierania listy kamer:', err);
-                        alert('Wystąpił problem z dostępem do kamery.');
+                    }).catch(function(e) {
+                        console.error("Nie można uruchomić kamery:", e);
+                        alert("Nie można uruchomić kamery: " + e);
                     });
-            } catch (error) {
-                console.error('Błąd podczas uruchamiania skanera:', error);
-                alert('Wystąpił problem z uruchomieniem skanera.');
-            }
+                    scanner.addListener('scan', function (content) {
+                        console.log("Kod zeskanowany:", content);
+                        scanner.stop();
+                        const scanButton = document.querySelector('#reader ~ button');
+                        if (scanButton) {
+                            scanButton.style.display = 'block';
+                        }
+                        fetchProductName(content);
+                    });
+                } else {
+                    console.error('Nie znaleziono dostępnych kamer.');
+                    alert('Nie znaleziono dostępnych kamer.');
+                }
+            }).catch(function (e) {
+                console.error('Błąd podczas pobierania listy kamer:', e);
+                alert('Błąd podczas pobierania listy kamer: ' + e);
+            });
         }
 
         function fetchProductName(barcode) {
