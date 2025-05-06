@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://unpkg.com/dynamsoft-javascript-barcode@0.8.13/dist/dbr.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -67,12 +66,11 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 2:20:00 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 2:25 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
-        let barcodeReader = null;
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -159,60 +157,61 @@
         }
 
         async function startScanner() {
-            const scannerDiv = document.getElementById('barcode-scanner');
-            try {
-                if (!barcodeReader) {
-                    Dynamsoft.DBR.BarcodeReader.createInstance()
-                        .then(reader => {
-                            barcodeReader = reader;
-                            return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                        })
-                        .then(stream => {
-                            scannerDiv.innerHTML = ''; // Clear previous content
-                            scannerDiv.appendChild(barcodeReader.getUIElement());
-                            barcodeReader.setInput(stream);
-                            barcodeReader.onFrameRead = results => {
-                                if (results.length > 0) {
-                                    const barcodeText = results[0].barcodeText;
-                                    console.log('Kod kreskowy wykryty:', barcodeText);
-                                    barcodeReader.stopScanning();
+            if ('BarcodeDetector' in window) {
+                const barcodeDetector = new BarcodeDetector({
+                    formats: ['ean_13', 'upc_a', 'ean_8', 'code_128', 'code_39'] // Spróbujmy z tymi formatami
+                });
+
+                const video = document.createElement('video');
+                const scannerDiv = document.getElementById('barcode-scanner');
+                scannerDiv.innerHTML = '';
+                scannerDiv.appendChild(video);
+
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.setAttribute('playsinline', true);
+                        video.play();
+
+                        async function detectCode() {
+                            try {
+                                const barcodes = await barcodeDetector.detect(video);
+                                if (barcodes.length > 0) {
+                                    const barcodeText = barcodes[0].rawValue;
+                                    console.log('Kod kreskowy wykryty (BarcodeDetector API):', barcodeText);
+                                    video.srcObject.getTracks().forEach(track => track.stop());
                                     const scanButton = document.querySelector('#barcode-scanner ~ button');
                                     if (scanButton) {
                                         scanButton.style.display = 'block';
                                     }
                                     fetchProductName(barcodeText);
+                                } else {
+                                    requestAnimationFrame(detectCode);
                                 }
-                            };
-                            barcodeReader.startScanning();
-                            const scanButton = document.querySelector('#barcode-scanner ~ button');
-                            if (scanButton) {
-                                scanButton.style.display = 'none';
+                            } catch (error) {
+                                console.error('Błąd podczas detekcji kodu kreskowego:', error);
+                                // Możemy spróbować ponownie po krótkim opóźnieniu
+                                setTimeout(detectCode, 100);
                             }
-                        })
-                        .catch(error => {
-                            console.error('Błąd podczas inicjalizacji lub uruchamiania skanera Dynamsoft:', error);
-                            alert('Nie udało się uruchomić skanera kodu kreskowego.');
-                        });
-                } else {
-                    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                        .then(stream => {
-                            scannerDiv.innerHTML = ''; // Clear previous content
-                            scannerDiv.appendChild(barcodeReader.getUIElement());
-                            barcodeReader.setInput(stream);
-                            barcodeReader.startScanning();
-                            const scanButton = document.querySelector('#barcode-scanner ~ button');
-                            if (scanButton) {
-                                scanButton.style.display = 'none';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Błąd podczas uzyskiwania dostępu do kamery:', error);
-                            alert('Nie uzyskano dostępu do kamery.');
-                        });
-                }
-            } catch (error) {
-                console.error('Błąd ogólny podczas uruchamiania skanera:', error);
-                alert('Wystąpił problem z uruchomieniem skanera.');
+                        }
+
+                        const scanButton = document.querySelector('#barcode-scanner ~ button');
+                        if (scanButton) {
+                            scanButton.style.display = 'none';
+                        }
+                        detectCode();
+
+                    })
+                    .catch(err => {
+                        console.error("Nie uzyskano dostępu do kamery:", err);
+                        alert("Nie uzyskano dostępu do kamery. Twoja przeglądarka może nie wspierać BarcodeDetector API lub odmówiono dostępu do kamery.");
+                        const scanButton = document.querySelector('#barcode-scanner ~ button');
+                        if (scanButton) {
+                            scanButton.style.display = 'block';
+                        }
+                    });
+            } else {
+                alert('Twoja przeglądarka nie wspiera BarcodeDetector API.');
             }
         }
 
