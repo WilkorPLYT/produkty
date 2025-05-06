@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
+    <script src="https://unpkg.com/@zxing/library@latest/umd/zxing-wasm.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -66,11 +67,12 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 2:25 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 2:27 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
+        let reader = null;
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -157,15 +159,22 @@
         }
 
         async function startScanner() {
-            if ('BarcodeDetector' in window) {
-                const barcodeDetector = new BarcodeDetector({
-                    formats: ['ean_13', 'upc_a', 'ean_8', 'code_128', 'code_39'] // Spróbujmy z tymi formatami
-                });
+            const video = document.createElement('video');
+            const scannerDiv = document.getElementById('barcode-scanner');
+            scannerDiv.innerHTML = '';
+            scannerDiv.appendChild(video);
 
-                const video = document.createElement('video');
-                const scannerDiv = document.getElementById('barcode-scanner');
-                scannerDiv.innerHTML = '';
-                scannerDiv.appendChild(video);
+            try {
+                await ZXing.BrowserMultiFormatReader.listVideoInputDevices()
+                    .then(videoInputDevices => {
+                        if (videoInputDevices.length > 0) {
+                            const firstDeviceId = videoInputDevices[0].deviceId;
+                            reader = new ZXing.BrowserMultiFormatReader();
+                            return reader.videoInputDevice(firstDeviceId);
+                        } else {
+                            throw new Error("Nie znaleziono dostępnych kamer.");
+                        }
+                    });
 
                 navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                     .then(stream => {
@@ -173,45 +182,47 @@
                         video.setAttribute('playsinline', true);
                         video.play();
 
-                        async function detectCode() {
-                            try {
-                                const barcodes = await barcodeDetector.detect(video);
-                                if (barcodes.length > 0) {
-                                    const barcodeText = barcodes[0].rawValue;
-                                    console.log('Kod kreskowy wykryty (BarcodeDetector API):', barcodeText);
-                                    video.srcObject.getTracks().forEach(track => track.stop());
-                                    const scanButton = document.querySelector('#barcode-scanner ~ button');
-                                    if (scanButton) {
-                                        scanButton.style.display = 'block';
+                        const decodeContinuously = () => {
+                            reader.decodeFromVideoElement(video)
+                                .then(result => {
+                                    if (result) {
+                                        console.log('Kod kreskowy wykryty (zxing-wasm):', result.text);
+                                        reader.reset();
+                                        video.srcObject.getTracks().forEach(track => track.stop());
+                                        const scanButton = document.querySelector('#barcode-scanner ~ button');
+                                        if (scanButton) {
+                                            scanButton.style.display = 'block';
+                                        }
+                                        fetchProductName(result.text);
+                                    } else {
+                                        requestAnimationFrame(decodeContinuously);
                                     }
-                                    fetchProductName(barcodeText);
-                                } else {
-                                    requestAnimationFrame(detectCode);
-                                }
-                            } catch (error) {
-                                console.error('Błąd podczas detekcji kodu kreskowego:', error);
-                                // Możemy spróbować ponownie po krótkim opóźnieniu
-                                setTimeout(detectCode, 100);
-                            }
-                        }
+                                })
+                                .catch(err => {
+                                    console.error('Błąd podczas dekodowania:', err);
+                                    requestAnimationFrame(decodeContinuously);
+                                });
+                        };
 
                         const scanButton = document.querySelector('#barcode-scanner ~ button');
                         if (scanButton) {
                             scanButton.style.display = 'none';
                         }
-                        detectCode();
+                        decodeContinuously();
 
                     })
                     .catch(err => {
                         console.error("Nie uzyskano dostępu do kamery:", err);
-                        alert("Nie uzyskano dostępu do kamery. Twoja przeglądarka może nie wspierać BarcodeDetector API lub odmówiono dostępu do kamery.");
+                        alert("Nie uzyskano dostępu do kamery.");
                         const scanButton = document.querySelector('#barcode-scanner ~ button');
                         if (scanButton) {
                             scanButton.style.display = 'block';
                         }
                     });
-            } else {
-                alert('Twoja przeglądarka nie wspiera BarcodeDetector API.');
+
+            } catch (error) {
+                console.error("Błąd podczas inicjalizacji zxing-wasm:", error);
+                alert(`Nie udało się uruchomić skanera: ${error.message}`);
             }
         }
 
