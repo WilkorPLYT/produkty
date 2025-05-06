@@ -67,7 +67,7 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 1:54:42 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 1:56:42 PM
     </div>
 
     <script>
@@ -161,7 +161,7 @@
 
         async function startScanner() {
             const videoPreview = document.getElementById('preview');
-            scanner = new Instascan.Scanner({ video: videoPreview });
+            let scanner = new Instascan.Scanner({ video: videoPreview });
 
             Instascan.Camera.getCameras().then(function (cameras) {
                 if (cameras.length > 0) {
