@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tracker Ważności Produktów</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, button, select { padding: 10px; margin: 5px 0; width: 100%; }
+    .product { padding: 10px; border-radius: 8px; margin: 10px 0; color: white; }
+    .green { background-color: #4CAF50; }
+    .orange { background-color: #FFA500; }
+    .red { background-color: #f44336; }
+    .header { font-weight: bold; }
+    .small { font-size: 0.9em; }
+    #scanner { margin: 10px 0; }
+    #reader { width: 100%; max-width: 300px; margin: auto; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Produkty z datą ważności</h1>
+
+  <input type="text" id="name" placeholder="Nazwa produktu">
+  <input type="date" id="expiry">
+  <input type="hidden" id="editIndex" value="">
+  <button onclick="addOrEditProduct()">Zapisz</button>
+  <button onclick="toggleScanner()">Skanuj kod kreskowy</button>
+
+  <input type="text" id="filter" placeholder="Szukaj produktu" oninput="renderProducts()">
+  <select id="sort" onchange="renderProducts()">
+    <option value="date">Sortuj: data ważności</option>
+    <option value="name">Sortuj: alfabetycznie</option>
+  </select>
+
+  <div id="reader"></div>
+  <div id="alert"></div>
+  <h2>Lista produktów</h2>
+  <div id="productList"></div>
+
+  <script>
+    const products = JSON.parse(localStorage.getItem('products')) || [];
+
+    function saveAndRender() {
+      localStorage.setItem('products', JSON.stringify(products));
+      renderProducts();
+    }
+
+    function addOrEditProduct() {
+      const name = document.getElementById('name').value;
+      const expiry = document.getElementById('expiry').value;
+      const editIndex = document.getElementById('editIndex').value;
+
+      if (!name || !expiry) return;
+
+      if (editIndex === '') {
+        products.push({ name, expiry });
+      } else {
+        products[editIndex] = { name, expiry };
+        document.getElementById('editIndex').value = '';
+      }
+
+      document.getElementById('name').value = '';
+      document.getElementById('expiry').value = '';
+      saveAndRender();
+    }
+
+    function renderProducts() {
+      const container = document.getElementById('productList');
+      const alertBox = document.getElementById('alert');
+      const filterText = document.getElementById('filter').value.toLowerCase();
+      const sortOption = document.getElementById('sort').value;
+
+      container.innerHTML = '';
+      alertBox.innerHTML = '';
+
+      const today = new Date();
+      let hasExpiring = false;
+
+      const sortedProducts = [...products].filter(p => p.name.toLowerCase().includes(filterText));
+
+      if (sortOption === 'date') {
+        sortedProducts.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+      } else {
+        sortedProducts.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      sortedProducts.forEach((p, i) => {
+        const expiryDate = new Date(p.expiry);
+        const diff = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        let color = 'green';
+        if (diff <= 5) color = 'orange';
+        if (diff < 1) color = 'red';
+
+        if (diff <= 3) hasExpiring = true;
+
+        const div = document.createElement('div');
+        div.className = `product ${color}`;
+        div.innerHTML = `
+          <div class="header">${p.name}</div>
+          <div class="small">Ważny do: ${p.expiry} (${diff} dni)</div>
+          <button onclick="editProduct(${products.indexOf(p)})">Edytuj</button>
+          <button onclick="deleteProduct(${products.indexOf(p)})">Usuń</button>
+        `;
+        container.appendChild(div);
+      });
+
+      if (hasExpiring) {
+        alertBox.innerHTML = '<b>Uwaga!</b> Masz produkty bliskie końca ważności.';
+        alertBox.style.color = 'red';
+      }
+    }
+
+    function editProduct(index) {
+      const p = products[index];
+      document.getElementById('name').value = p.name;
+      document.getElementById('expiry').value = p.expiry;
+      document.getElementById('editIndex').value = index;
+    }
+
+    function deleteProduct(index) {
+      products.splice(index, 1);
+      saveAndRender();
+    }
+
+    // Barcode scanning + Open Food Facts API
+    let scannerVisible = false;
+    const html5QrCode = new Html5Qrcode("reader");
+
+    function toggleScanner() {
+      if (scannerVisible) {
+        html5QrCode.stop();
+        document.getElementById("reader").style.display = "none";
+        scannerVisible = false;
+      } else {
+        Html5Qrcode.getCameras().then(devices => {
+          if (devices && devices.length) {
+            html5QrCode.start(
+              devices[0].id,
+              { fps: 10, qrbox: 250 },
+              (decodedText) => {
+                fetchProductName(decodedText);
+                toggleScanner();
+              },
+              (errorMessage) => {
+                // błąd przy skanowaniu
+              }
+            );
+            document.getElementById("reader").style.display = "block";
+            scannerVisible = true;
+          }
+        }).catch(err => console.error(err));
+      }
+    }
+
+    function fetchProductName(barcode) {
+      fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 1) {
+            document.getElementById("name").value = data.product.product_name || barcode;
+          } else {
+            document.getElementById("name").value = barcode;
+          }
+        })
+        .catch(() => {
+          document.getElementById("name").value = barcode;
+        });
+    }
+
+    renderProducts();
+  </script>
+</body>
+</html>
