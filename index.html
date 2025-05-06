@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Tracker Ważności Produktów</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="https://unpkg.com/dynamsoft-javascript-barcode@latest/dist/dbr.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -67,13 +67,12 @@
     <div id="productList"></div>
 
     <div id="footer">
-        Ostatnia aktualizacja kodu: 6 maja 2025, 2:16:00 PM
+        Ostatnia aktualizacja kodu: 6 maja 2025, 2:20:00 PM
     </div>
 
     <script>
         let products = JSON.parse(localStorage.getItem('products')) || [];
-        let html5QrCode = null;
-        let scanner = null;
+        let barcodeReader = null;
 
         function saveProducts() {
             localStorage.setItem('products', JSON.stringify(products));
@@ -162,62 +161,59 @@
         async function startScanner() {
             const scannerDiv = document.getElementById('barcode-scanner');
             try {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                    .then(function(stream) {
-                        Quagga.init({
-                            inputStream : {
-                                name : "Live",
-                                type : "LiveStream",
-                                target : scannerDiv,
-                                constraints: {
-                                    width: 640,
-                                    height: 480,
-                                    facingMode: 'environment'
+                if (!barcodeReader) {
+                    Dynamsoft.DBR.BarcodeReader.createInstance()
+                        .then(reader => {
+                            barcodeReader = reader;
+                            return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                        })
+                        .then(stream => {
+                            scannerDiv.innerHTML = ''; // Clear previous content
+                            scannerDiv.appendChild(barcodeReader.getUIElement());
+                            barcodeReader.setInput(stream);
+                            barcodeReader.onFrameRead = results => {
+                                if (results.length > 0) {
+                                    const barcodeText = results[0].barcodeText;
+                                    console.log('Kod kreskowy wykryty:', barcodeText);
+                                    barcodeReader.stopScanning();
+                                    const scanButton = document.querySelector('#barcode-scanner ~ button');
+                                    if (scanButton) {
+                                        scanButton.style.display = 'block';
+                                    }
+                                    fetchProductName(barcodeText);
                                 }
-                            },
-                            decoder : {
-                                readers : [
-                                    "ean_13_reader",
-                                    "ean_8_reader",
-                                    "code_128_reader",
-                                    "code_39_reader"
-                                ]
-                            }
-                        }, function(err) {
-                            if (err) {
-                                console.error(err);
-                                alert("Nie udało się uruchomić skanera kodu kreskowego.");
-                                return;
-                            }
-                            console.log("QuaggaJS zainicjalizowano.");
-                            Quagga.start();
+                            };
+                            barcodeReader.startScanning();
                             const scanButton = document.querySelector('#barcode-scanner ~ button');
                             if (scanButton) {
                                 scanButton.style.display = 'none';
                             }
+                        })
+                        .catch(error => {
+                            console.error('Błąd podczas inicjalizacji lub uruchamiania skanera Dynamsoft:', error);
+                            alert('Nie udało się uruchomić skanera kodu kreskowego.');
                         });
-
-                        Quagga.onDetected(onBarcodeDetected);
-                    })
-                    .catch(function(err) {
-                        console.error("Nie uzyskano dostępu do kamery:", err);
-                        alert("Nie uzyskano dostępu do kamery.");
-                    });
+                } else {
+                    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                        .then(stream => {
+                            scannerDiv.innerHTML = ''; // Clear previous content
+                            scannerDiv.appendChild(barcodeReader.getUIElement());
+                            barcodeReader.setInput(stream);
+                            barcodeReader.startScanning();
+                            const scanButton = document.querySelector('#barcode-scanner ~ button');
+                            if (scanButton) {
+                                scanButton.style.display = 'none';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Błąd podczas uzyskiwania dostępu do kamery:', error);
+                            alert('Nie uzyskano dostępu do kamery.');
+                        });
+                }
             } catch (error) {
-                console.error("Błąd podczas uruchamiania skanera:", error);
-                alert("Wystąpił problem z uruchomieniem skanera.");
+                console.error('Błąd ogólny podczas uruchamiania skanera:', error);
+                alert('Wystąpił problem z uruchomieniem skanera.');
             }
-        }
-
-        function onBarcodeDetected(result) {
-            console.log("Kod kreskowy wykryty:", result.codeResult.code);
-            Quagga.stop();
-            document.querySelector('#barcode-scanner').innerHTML = '';
-            const scanButton = document.querySelector('#barcode-scanner ~ button');
-            if (scanButton) {
-                scanButton.style.display = 'block';
-            }
-            fetchProductName(result.codeResult.code);
         }
 
         function fetchProductName(barcode) {
